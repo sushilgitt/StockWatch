@@ -1,0 +1,108 @@
+/* General Container */
+.pricing-container {
+  min-height: 100vh;
+  /* background-color: #0d0d0d; */
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 50px 20px;
+}
+
+/* Title */
+.pricing-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #b366ff;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+/* Grid Layout */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 25px;
+  width: 100%;
+  max-width: 1100px;
+}
+
+/* Card Styling */
+.pricing-card {
+  background: #1a1a1a;
+  border: 2px solid #7a2cff;
+  border-radius: 15px;
+  padding: 30px 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 10px rgba(122, 44, 255, 0.2);
+}
+
+.pricing-card:hover {
+  box-shadow: 0 0 20px rgba(122, 44, 255, 0.4);
+  transform: translateY(-5px);
+}
+
+/* Plan Name */
+.plan-name {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #cdb6ff;
+  margin-bottom: 10px;
+}
+
+/* Price */
+.plan-price {
+  font-size: 2.2rem;
+  font-weight: bold;
+  margin-bottom: 25px;
+  color: #ffffff;
+}
+
+/* Button */
+.choose-btn {
+  background-color: #7a2cff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.choose-btn:hover {
+  background-color: #9d66ff;
+}
+
+/* Custom Plan Card Enhancements */
+.custom-card {
+  background: linear-gradient(145deg, #1e1e1e, #292929);
+  border: 2px solid #b366ff;
+  box-shadow: 0 0 20px rgba(179, 102, 255, 0.3);
+}
+
+.custom-subtext {
+  color: #cdb6ff;
+  font-size: 0.9rem;
+  margin-bottom: 15px;
+}
+
+.custom-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 1rem;
+  text-align: center;
+  margin-bottom: 20px;
+  outline: none;
+  background-color: #2a2a2a;
+  color: white;
+  border: 1px solid #7a2cff;
+}
+
+.custom-input:focus {
+  border-color: #b366ff;
+  box-shadow: 0 0 8px rgba(179, 102, 255, 0.3);
+}
