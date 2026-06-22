@@ -40,7 +40,7 @@ function Payment() {
                     </div>
 
                     <div className="plan-price">
-                        $150
+                        $15
                         <span>/month</span>
                     </div>
 
