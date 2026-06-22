@@ -8,9 +8,12 @@ if (
   !process.env.CI &&
   !process.env.SHOPIFY_API_KEY
 ) {
-  throw new Error(
-    "\n\nThe frontend build will not work without an API key. Set the SHOPIFY_API_KEY environment variable when running the build command, for example:" +
-      "\n\nSHOPIFY_API_KEY=<your-api-key> npm run build\n"
+  // The Shopify API key is injected into index.html at runtime by the backend
+  // (see web/index.js, which replaces %VITE_SHOPIFY_API_KEY%), so the build does
+  // not need it baked in. Warn instead of failing the build/deploy.
+  console.warn(
+    "\n\nBuilding the frontend without SHOPIFY_API_KEY set. This is fine: the key is " +
+      "injected at runtime by the backend. Set SHOPIFY_API_KEY to embed it at build time.\n"
   );
 }
 
