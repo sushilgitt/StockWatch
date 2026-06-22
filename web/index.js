@@ -11,6 +11,16 @@ import { storeRouter } from "./Routes/Store.Routes.js";
 import { thresholdRouter } from "./Routes/Threshold.Route.js";
 import paymentRouter from "./Routes/Payment.route.js";
 
+// Keep the process alive if the Shopify auth middleware (or anything else)
+// throws asynchronously — e.g. a 403 from Shopify during access-token
+// validation. Previously such errors crashed Node and 502'd the whole app.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+});
+
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
   10

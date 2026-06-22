@@ -92,8 +92,13 @@ export const createSubscription = async (req, res) => {
         });
 
         const result = response.body.data.appSubscriptionCreate;
+        console.log("appSubscriptionCreate result:", JSON.stringify(result));
 
         if (result.userErrors && result.userErrors.length > 0) {
+            console.error(
+                "appSubscriptionCreate userErrors:",
+                JSON.stringify(result.userErrors)
+            );
             return res.status(400).json({
                 success: false,
                 message: result.userErrors[0].message,
