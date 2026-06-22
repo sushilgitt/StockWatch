@@ -9,10 +9,11 @@ import Pricing from "./pages/Pricing";
 import { useEffect, useState } from "react";
 import Payment from "./pages/Payment";
 
-// Temporary: bypass the subscription paywall so the app can be tested on a
-// development store without an active plan. Set this back to false to re-enable
-// the Managed Pricing gate before going live.
-const BYPASS_BILLING = true;
+// Subscription gate. When false, the app requires an ACTIVE subscription (the
+// $15/month Billing API charge created in Payment.jsx -> /api/createSubscription,
+// which uses test mode so it never bills real money during testing).
+// Set to true to bypass the gate entirely while developing other features.
+const BYPASS_BILLING = false;
 
 export default function App() {
   // Any .tsx or .jsx files in /pages will become a route

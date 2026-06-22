@@ -19,9 +19,29 @@ function Payment() {
         getStore();
     }, []);
 
-    const storehandle = store?.domain ? store.domain.split(".")[0] : "your-store";
+    const [activating, setActivating] = useState(false);
 
-    // https://admin.shopify.com/store/comodo24-2/charges/comodo24-2/pricing_plans
+    // Create a $15/month recurring charge via the Billing API and send the
+    // merchant to Shopify's confirmation page to approve it.
+    const handleActivate = async () => {
+        try {
+            setActivating(true);
+            const response = await fetch("/api/createSubscription", {
+                method: "POST",
+            });
+            const data = await response.json();
+            if (data?.success && data?.confirmationUrl) {
+                // Top-level redirect so it breaks out of the embedded iframe.
+                window.open(data.confirmationUrl, "_top");
+            } else {
+                console.error("Failed to create subscription:", data);
+                setActivating(false);
+            }
+        } catch (error) {
+            console.error("Error creating subscription:", error);
+            setActivating(false);
+        }
+    };
 
 
     return (
@@ -53,13 +73,10 @@ function Payment() {
 
                     <button
                         className="payment-btn"
-                        onClick={() =>
-                            window.open(
-                                `https://admin.shopify.com/store/${storehandle}/charges/shopping-89/pricing_plans`
-                            )
-                        }
+                        onClick={handleActivate}
+                        disabled={activating}
                     >
-                        Activate Plan
+                        {activating ? "Redirecting..." : "Activate Plan"}
                     </button>
 
                 </div>
