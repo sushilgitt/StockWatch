@@ -14,11 +14,36 @@ import paymentRouter from "./Routes/Payment.route.js";
 // Keep the process alive if the Shopify auth middleware (or anything else)
 // throws asynchronously — e.g. a 403 from Shopify during access-token
 // validation. Previously such errors crashed Node and 502'd the whole app.
+const logFullError = (label, err) => {
+  console.error(label, err?.message || err);
+  // The Shopify HttpResponseError truncates to [Object] in default logging.
+  // Print the full response so we can see Shopify's actual reason + request id.
+  if (err?.response) {
+    try {
+      console.error(
+        `${label} response:`,
+        JSON.stringify(
+          {
+            code: err.response.code,
+            statusText: err.response.statusText,
+            body: err.response.body,
+            requestId: err.response.headers?.["x-request-id"],
+            apiVersion: err.response.headers?.["x-shopify-api-version"],
+          },
+          null,
+          2
+        )
+      );
+    } catch (e) {
+      console.error(`${label} response (raw):`, err.response);
+    }
+  }
+};
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled promise rejection:", reason);
+  logFullError("Unhandled promise rejection:", reason);
 });
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught exception:", err);
+  logFullError("Uncaught exception:", err);
 });
 
 const PORT = parseInt(
