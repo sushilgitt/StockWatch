@@ -2,6 +2,41 @@ import sendThresholdAlert from "../Middlewares/Email.js";
 import ThresholdModel from "../Models/Threshold.Model.js";
 import shopify from "../shopify.js";
 
+// Resolve an inventory item to its product, then run the existing threshold
+// check + alert. Used by the inventory_levels/update webhook (read_inventory),
+// which avoids the protected-customer-data read_orders scope.
+export const trackInventoryItem = async (session, inventoryItemId) => {
+  try {
+    const client = new shopify.api.clients.Graphql({ session });
+    const inventoryItemGID = `gid://shopify/InventoryItem/${inventoryItemId}`;
+
+    const data = await client.query({
+      data: {
+        query: `
+          query GetInventoryItem($id: ID!) {
+            inventoryItem(id: $id) {
+              id
+              variant { id product { id } }
+            }
+          }
+        `,
+        variables: { id: inventoryItemGID },
+      },
+    });
+
+    const productId = data.body.data.inventoryItem?.variant?.product?.id;
+    if (!productId) {
+      console.log("No product found for inventory item:", inventoryItemId);
+      return { success: false, error: "product not found for inventory item" };
+    }
+
+    return await trackProductQuantity(session, productId);
+  } catch (error) {
+    console.error("trackInventoryItem error:", error.message);
+    return { success: false, error };
+  }
+};
+
 export const trackProductQuantity = async (session, productId) => {
   try {
     const client = new shopify.api.clients.Graphql({ session });

@@ -1,5 +1,5 @@
 import { DeliveryMethod } from "@shopify/shopify-api";
-import { trackProductQuantity } from "./Controllers/Product.Controller.js";
+import { trackInventoryItem } from "./Controllers/Product.Controller.js";
 import shopify from "./shopify.js";
 
 /**
@@ -86,7 +86,10 @@ export default {
     },
   },
 
-  ORDERS_CREATE: {
+  // Fires whenever a product's available inventory changes at a location (sale,
+  // restock, manual edit). Only needs read_inventory — no protected customer
+  // data — so it avoids the read_orders/403 issue that orders/create caused.
+  INVENTORY_LEVELS_UPDATE: {
     deliveryMethod: DeliveryMethod.Http,
     callbackUrl: "/api/webhooks",
     callback: async (topic, shop, body, webhookId) => {
@@ -94,31 +97,20 @@ export default {
 
       try {
         const data = typeof body === 'string' ? JSON.parse(body) : body;
-        console.log("Order data:", JSON.stringify(data, null, 2));
+        console.log("Inventory level data:", JSON.stringify(data, null, 2));
 
-        // Get session correctly
+        // Get session for this shop
         const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
         if (!sessions || sessions.length === 0) {
           throw new Error(`No session found for shop: ${shop}`);
         }
-
         const session = sessions[0];
-        console.log("Session found:", session);
 
-        // Extract product IDs from line items
-        const productIds = data.line_items.map(item => {
-          return `gid://shopify/Product/${item.product_id}`;
-        });
+        const inventoryItemId = data.inventory_item_id;
+        console.log(`Webhooks Id: ${webhookId}, inventory_item_id: ${inventoryItemId}`);
 
-        console.log("Extracted Product IDs:", productIds);
-
-        // Track each product in the order by ID
-        for (const productId of productIds) {
-          console.log(`Webhooks Id: ${webhookId}`);
-          const resp = await trackProductQuantity(session, productId);
-          console.log(resp);
-        }
-
+        const resp = await trackInventoryItem(session, inventoryItemId);
+        console.log(resp);
       } catch (error) {
         console.error("Webhook processing error:", error);
         throw error;
