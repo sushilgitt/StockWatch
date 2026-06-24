@@ -224,6 +224,9 @@ const exchangeExpiringOfflineToken = async (shop, sessionToken) => {
   }
 
   const data = await resp.json();
+  console.log(
+    `[auth] token exchange OK for ${shop}: hasToken=${!!data.access_token} expires_in=${data.expires_in} scope=${data.scope}`
+  );
   return new Session({
     id: shopify.api.session.getOfflineId(shop),
     shop,
@@ -235,6 +238,45 @@ const exchangeExpiringOfflineToken = async (shop, sessionToken) => {
       expires: new Date(Date.now() + data.expires_in * 1000),
     }),
   });
+};
+
+// Per-shop lock so concurrent /api requests don't each run their own token
+// exchange. Parallel exchanges can race and leave a stale (already-rotated)
+// token in storage, which then 401s on every reuse. Serializing means one
+// exchange per burst; everyone else reuses the freshly stored token.
+const exchangeInFlight = new Map();
+
+const getOfflineSession = async (shop, sessionToken) => {
+  const offlineId = shopify.api.session.getOfflineId(shop);
+  const isFresh = (s) =>
+    s?.accessToken &&
+    s.expires &&
+    new Date(s.expires).getTime() > Date.now() + 60000;
+
+  let session = await shopify.config.sessionStorage.loadSession(offlineId);
+  if (isFresh(session)) return session;
+
+  // If an exchange for this shop is already running, wait for it rather than
+  // starting a competing one.
+  if (exchangeInFlight.has(shop)) {
+    try {
+      await exchangeInFlight.get(shop);
+    } catch (_) {}
+    session = await shopify.config.sessionStorage.loadSession(offlineId);
+    if (isFresh(session)) return session;
+  }
+
+  const promise = (async () => {
+    const fresh = await exchangeExpiringOfflineToken(shop, sessionToken);
+    await shopify.config.sessionStorage.storeSession(fresh);
+    return fresh;
+  })();
+  exchangeInFlight.set(shop, promise);
+  try {
+    return await promise;
+  } finally {
+    exchangeInFlight.delete(shop);
+  }
 };
 
 // Authenticate every /api/* request via TOKEN EXCHANGE (expiring offline
@@ -253,21 +295,7 @@ const authViaTokenExchange = async (req, res, next) => {
     const payload = await shopify.api.session.decodeSessionToken(sessionToken);
     const shop = payload.dest.replace(/^https?:\/\//, "");
 
-    const offlineId = shopify.api.session.getOfflineId(shop);
-    let session = await shopify.config.sessionStorage.loadSession(offlineId);
-
-    // Reuse only a valid, *expiring* token that hasn't expired. Otherwise
-    // (missing / expired / a legacy non-expiring token with no `expires`),
-    // exchange a fresh one.
-    const reusable =
-      session?.accessToken &&
-      session.expires &&
-      new Date(session.expires).getTime() > Date.now() + 10000;
-
-    if (!reusable) {
-      session = await exchangeExpiringOfflineToken(shop, sessionToken);
-      await shopify.config.sessionStorage.storeSession(session);
-    }
+    const session = await getOfflineSession(shop, sessionToken);
 
     res.locals.shopify = { session };
     next();
