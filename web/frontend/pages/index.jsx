@@ -19,7 +19,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   return (
     <Page narrowWidth>
-      <TitleBar title="StockPing" />
+      <TitleBar title="Stock Watch" />
       <Layout>
         <Layout.Section>
           <Box padding="4">
@@ -27,7 +27,7 @@ export default function HomePage() {
               <TextContainer>
                 <Heading>Never miss a low stock alert</Heading>
                 <Text as="p" variant="bodyMd">
-                  StockPing monitors your inventory and notifies you when products fall below your specified threshold.
+                  Stock Watch monitors your inventory and notifies you when products fall below your specified threshold.
                 </Text>
 
                 <Box paddingBlockStart="4">

@@ -122,7 +122,7 @@ export default function Settings() {
 
     return (
         <Page narrowWidth>
-            <TitleBar title="StockPing Settings" />
+            <TitleBar title="Stock Watch Settings" />
             <Layout>
                 {saveSuccess && (
                     <Layout.Section>
