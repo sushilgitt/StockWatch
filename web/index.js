@@ -381,7 +381,19 @@ const authViaTokenExchange = async (req, res, next) => {
 
     const session = await getOfflineSession(shop, sessionToken);
 
-    res.locals.shopify = { session };
+    res.locals.shopify = {
+      session,
+      // Force a fresh token exchange and update the session. Called by
+      // adminGraphqlQuery when Shopify rejects the cached token with 401
+      // (e.g. it was revoked out-of-band, like during `shopify app dev`).
+      reexchange: async () => {
+        const fresh = await exchangeExpiringOfflineToken(shop, sessionToken);
+        await shopify.config.sessionStorage.storeSession(fresh);
+        res.locals.shopify.session = fresh;
+        console.log(`[auth] re-exchanged token after 401 for ${shop}`);
+        return fresh;
+      },
+    };
 
     // Ensure our webhooks exist (once per shop per process; idempotent).
     // Fire-and-forget so it never blocks the request.

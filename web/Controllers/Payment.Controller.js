@@ -1,12 +1,9 @@
 import shopify from "../shopify.js";
+import { adminGraphqlQuery } from "../utils/graphqlWithRetry.js";
 
 export const getPayment = async (req, res) => {
     try {
-        const client = new shopify.api.clients.Graphql({
-            session: res.locals.shopify.session
-        });
-        const data = await client.query({
-            data: `{
+        const data = await adminGraphqlQuery(res, `{
                         app {
                             installation {
                             id
@@ -19,8 +16,7 @@ export const getPayment = async (req, res) => {
                             }
                         }
                     }
-                        `
-        });
+                        `);
         return res.status(200).json({
             data: data.body.data.app.installation.activeSubscriptions,
             message: "Payment fetched successfully",
@@ -48,14 +44,12 @@ const BILLING_TEST = process.env.BILLING_TEST !== "false";
 export const createSubscription = async (req, res) => {
     try {
         const session = res.locals.shopify.session;
-        const client = new shopify.api.clients.Graphql({ session });
 
         // After the merchant approves the charge, Shopify sends them back here,
         // which re-opens the embedded app in their admin.
         const returnUrl = `https://${session.shop}/admin/apps/${process.env.SHOPIFY_API_KEY}`;
 
-        const response = await client.query({
-            data: {
+        const response = await adminGraphqlQuery(res, {
                 query: `
                     mutation AppSubscriptionCreate(
                         $name: String!
@@ -90,7 +84,6 @@ export const createSubscription = async (req, res) => {
                         },
                     ],
                 },
-            },
         });
 
         const result = response.body.data.appSubscriptionCreate;
