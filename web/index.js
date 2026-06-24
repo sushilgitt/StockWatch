@@ -168,6 +168,11 @@ app.get("/diag-alert", async (req, res) => {
       out.webhooks = await r.json();
     }
 
+    if (req.query.register && session) {
+      await ensureWebhooksRegistered(session);
+      out.registerTriggered = true;
+    }
+
     const ThresholdModel = (await import("./Models/Threshold.Model.js")).default;
     out.thresholdForShop = await ThresholdModel.findOne({ domain: shop });
     out.allThresholds = await ThresholdModel.find({}).lean();
@@ -279,6 +284,85 @@ const getOfflineSession = async (shop, sessionToken) => {
   }
 };
 
+// Make sure the shop is subscribed to the webhooks we need. App-managed (TOML)
+// subscriptions only register via `shopify app deploy`, which this git->Coolify
+// deployment never runs — so we register from code instead. Idempotent: it
+// checks existing subscriptions first. Runs once per shop per process (and
+// re-checks after a redeploy, which is harmless).
+const DESIRED_WEBHOOK_TOPICS = ["INVENTORY_LEVELS_UPDATE"];
+const ensuredWebhookShops = new Set();
+
+const ensureWebhooksRegistered = async (session) => {
+  const appUrl = (process.env.SHOPIFY_APP_URL || process.env.HOST || "").replace(
+    /\/+$/,
+    ""
+  );
+  if (!appUrl) {
+    console.error("[webhooks] no SHOPIFY_APP_URL/HOST set; cannot register");
+    return;
+  }
+  const callbackUrl = `${appUrl}/api/webhooks`;
+  const shop = session.shop;
+  const apiVersion = shopify.api.config.apiVersion;
+
+  const gql = async (query, variables) => {
+    const r = await fetch(
+      `https://${shop}/admin/api/${apiVersion}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": session.accessToken,
+        },
+        body: JSON.stringify({ query, variables }),
+      }
+    );
+    return r.json();
+  };
+
+  const existing = await gql(`{
+    webhookSubscriptions(first: 50) {
+      edges { node {
+        topic
+        endpoint { __typename ... on WebhookHttpEndpoint { callbackUrl } }
+      } }
+    }
+  }`);
+
+  const have = new Set(
+    (existing?.data?.webhookSubscriptions?.edges || [])
+      .filter((e) => e.node.endpoint?.callbackUrl === callbackUrl)
+      .map((e) => e.node.topic)
+  );
+
+  for (const topic of DESIRED_WEBHOOK_TOPICS) {
+    if (have.has(topic)) {
+      console.log(`[webhooks] ${topic} already registered for ${shop}`);
+      continue;
+    }
+    const res = await gql(
+      `mutation Register($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) {
+        webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) {
+          userErrors { field message }
+          webhookSubscription { id }
+        }
+      }`,
+      { topic, sub: { callbackUrl, format: "JSON" } }
+    );
+    const out = res?.data?.webhookSubscriptionCreate;
+    if (out?.userErrors?.length) {
+      console.error(
+        `[webhooks] ${topic} register error:`,
+        JSON.stringify(out.userErrors)
+      );
+    } else {
+      console.log(
+        `[webhooks] ✅ registered ${topic} -> ${callbackUrl} (${out?.webhookSubscription?.id})`
+      );
+    }
+  }
+};
+
 // Authenticate every /api/* request via TOKEN EXCHANGE (expiring offline
 // tokens). Shopify no longer accepts the non-expiring tokens that the legacy
 // OAuth code-grant flow produced, and shopify-app-express 5.0.20 only does
@@ -298,6 +382,17 @@ const authViaTokenExchange = async (req, res, next) => {
     const session = await getOfflineSession(shop, sessionToken);
 
     res.locals.shopify = { session };
+
+    // Ensure our webhooks exist (once per shop per process; idempotent).
+    // Fire-and-forget so it never blocks the request.
+    if (!ensuredWebhookShops.has(shop)) {
+      ensuredWebhookShops.add(shop);
+      ensureWebhooksRegistered(session).catch((e) => {
+        ensuredWebhookShops.delete(shop);
+        console.error("[webhooks] registration failed:", e?.message || e);
+      });
+    }
+
     next();
   } catch (e) {
     console.error("Auth (token exchange) failed:", e?.message || e);
