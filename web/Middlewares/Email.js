@@ -3,7 +3,8 @@ import transporter from "./Email.config.js";
 const sendThresholdAlert = async (toEmail, productTitle, currentInventory,domain,gid) => {
   try {
     const mailOptions = {
-      from: '"StockSentinel" <yohanalberty13@gmail.com>',
+      // Visible sender. Must match the authenticated EMAIL_USER (Gmail requirement).
+      from: process.env.EMAIL_FROM || `"StockWatch" <${process.env.EMAIL_USER}>`,
       to: toEmail,
       subject: `⚠️ Inventory Alert: ${productTitle}`,
       text: `The current inventory for ${productTitle} is ${currentInventory}.`,
