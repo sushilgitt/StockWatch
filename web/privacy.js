@@ -99,12 +99,20 @@ export default {
         const data = typeof body === 'string' ? JSON.parse(body) : body;
         console.log("Inventory level data:", JSON.stringify(data, null, 2));
 
-        // Get session for this shop
-        const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
-        if (!sessions || sessions.length === 0) {
+        // Load the OFFLINE session for this shop. Prefer the canonical offline
+        // session id over sessions[0], which could be an online (per-user)
+        // session with a short-lived token and different scopes.
+        const offlineId = shopify.api.session.getOfflineId(shop);
+        let session = await shopify.config.sessionStorage.loadSession(offlineId);
+        if (!session?.accessToken) {
+          const sessions =
+            await shopify.config.sessionStorage.findSessionsByShop(shop);
+          session =
+            sessions?.find((s) => !s.isOnline && s.accessToken) || sessions?.[0];
+        }
+        if (!session?.accessToken) {
           throw new Error(`No session found for shop: ${shop}`);
         }
-        const session = sessions[0];
 
         const inventoryItemId = data.inventory_item_id;
         console.log(`Webhooks Id: ${webhookId}, inventory_item_id: ${inventoryItemId}`);

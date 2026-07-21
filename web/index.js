@@ -1,4 +1,9 @@
 // @ts-check
+// MUST be first: loads the repo-root .env into process.env before any import
+// below reads it (shopify.js, DB.config.js, Email.config.js read env at import
+// time). Kept as a separate side-effect module so it runs ahead of the imports
+// beneath it — ES module imports evaluate in source order.
+import "./loadEnv.js";
 import { join } from "path";
 import { readFileSync } from "fs";
 import express from "express";

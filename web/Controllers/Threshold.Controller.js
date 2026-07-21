@@ -3,13 +3,23 @@ import ThresholdModel from "../Models/Threshold.Model.js";
  
 export const createOrUpdateThreshold = async (req, res) => {
     try {
-        const { thresholdValue, Store_Id, domain, email } = req.body;
+        const { thresholdValue, Store_Id, email } = req.body;
+
+        // The inventory webhook looks up this threshold by session.shop — the
+        // shop's *.myshopify.com domain. The frontend used to send the store's
+        // *primary* domain (Shop.domain), which differs on any store that has a
+        // custom domain, so the webhook lookup found nothing and no low-stock
+        // alert email was ever sent. Always key the threshold on the
+        // authoritative myshopify domain from the authenticated session. This
+        // request runs behind the /api token-exchange auth middleware, so the
+        // session is always present here.
+        const domain = res.locals?.shopify?.session?.shop;
 
         // Validate required fields
         if (!thresholdValue || !Store_Id || !domain || !email) {
             return res.status(400).json({
                 success: false,
-                message: "All fields (thresholdValue, Store_Id, domain, email) are required"
+                message: "All fields (thresholdValue, Store_Id, email) are required, and an authenticated session is required"
             });
         }
 
