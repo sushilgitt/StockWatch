@@ -1,7 +1,6 @@
 import transporter from "./Email.config.js";
 
 const sendThresholdAlert = async (toEmail, productTitle, currentInventory,domain,gid) => {
-  try {
     const mailOptions = {
       // Visible sender. Must match the authenticated EMAIL_USER (Gmail requirement).
       from: process.env.EMAIL_FROM || `"StockWatch" <${process.env.EMAIL_USER}>`,
@@ -41,11 +40,13 @@ const sendThresholdAlert = async (toEmail, productTitle, currentInventory,domain
       `
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ Alert email sent to ${toEmail} for product ${productTitle}`);
-  } catch (error) {
-    console.error("❌ Error sending alert email:", error);
-  }
+    // Let SMTP failures throw so the caller knows the alert did NOT go out
+    // (previously the error was swallowed and the caller still logged success).
+    const info = await transporter.sendMail(mailOptions);
+    console.log(
+      `✅ Alert email sent to ${toEmail} for product ${productTitle} (id=${info.messageId})`
+    );
+    return info;
 };
 
 export default sendThresholdAlert;

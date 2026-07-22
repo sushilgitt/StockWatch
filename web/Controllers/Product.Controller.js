@@ -1,6 +1,7 @@
 import sendThresholdAlert from "../Middlewares/Email.js";
 import ThresholdModel from "../Models/Threshold.Model.js";
 import shopify from "../shopify.js";
+import { refreshOfflineToken } from "../utils/offlineToken.js";
 
 // Run an Admin GraphQL query from the webhook path. Unlike /api requests, a
 // webhook has no res.locals session and no incoming session token, so it can't
@@ -15,20 +16,32 @@ const webhookGraphql = async (session, data) => {
   try {
     return await run(session);
   } catch (error) {
-    if (error?.response?.code === 401) {
-      const offlineId = shopify.api.session.getOfflineId(session.shop);
-      const fresh = await shopify.config.sessionStorage.loadSession(offlineId);
-      if (fresh?.accessToken && fresh.accessToken !== session.accessToken) {
-        console.warn(
-          `[webhook] cached token 401 for ${session.shop}; retrying with reloaded session`
-        );
-        return await run(fresh);
-      }
-      console.error(
-        `[webhook] cached token 401 for ${session.shop} and no fresher token in storage; letting Shopify retry`
+    if (error?.response?.code !== 401) throw error;
+
+    // 1) Cheap path: a concurrent /api request may already have stored a fresher
+    //    token (e.g. the merchant just opened the app).
+    const offlineId = shopify.api.session.getOfflineId(session.shop);
+    const reloaded = await shopify.config.sessionStorage.loadSession(offlineId);
+    if (reloaded?.accessToken && reloaded.accessToken !== session.accessToken) {
+      console.warn(
+        `[webhook] token 401 for ${session.shop}; retrying with reloaded session`
       );
+      try {
+        return await run(reloaded);
+      } catch (e2) {
+        if (e2?.response?.code !== 401) throw e2;
+      }
     }
-    throw error;
+
+    // 2) Self-heal: mint a fresh offline token from the stored refresh_token.
+    //    Needs no incoming user session token, so it works from the webhook
+    //    path. persistOfflineToken (inside refreshOfflineToken) saves the new
+    //    rotated tokens.
+    console.warn(
+      `[webhook] token 401 for ${session.shop}; refreshing offline token`
+    );
+    const refreshed = await refreshOfflineToken(session.shop);
+    return await run(refreshed);
   }
 };
 
@@ -140,16 +153,26 @@ export const trackProductQuantity = async (session, productId) => {
     //   2. a merchant manually editing the quantity in Admin → Inventory.
     // Both cases email the merchant, exactly as required.
     if (totalInventory <= thresholdValue) {
-      await sendThresholdAlert(
-        email,
-        product.title,
-        totalInventory,
-        mainDomain,
-        productGID
-      );
-      console.log(
-        `✅ ${product.title} at/below threshold (${totalInventory} <= ${thresholdValue}); alert sent to ${email}.`
-      );
+      try {
+        await sendThresholdAlert(
+          email,
+          product.title,
+          totalInventory,
+          mainDomain,
+          productGID
+        );
+        console.log(
+          `✅ ${product.title} at/below threshold (${totalInventory} <= ${thresholdValue}); alert sent to ${email}.`
+        );
+      } catch (mailErr) {
+        // The alert genuinely failed to send — surface it instead of the old
+        // silent swallow that still logged success.
+        console.error(
+          `❌ email send FAILED for ${product.title} -> ${email}:`,
+          mailErr?.message || mailErr
+        );
+        return { success: false, error: mailErr };
+      }
     } else {
       console.log(
         `${product.title} above threshold (${totalInventory} > ${thresholdValue}); no alert.`

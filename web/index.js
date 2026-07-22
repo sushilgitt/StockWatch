@@ -9,13 +9,13 @@ import { readFileSync } from "fs";
 import express from "express";
 import serveStatic from "serve-static";
 
-import { Session } from "@shopify/shopify-api";
 import shopify from "./shopify.js";
 import dbConn from "./utils/DB.config.js";
 import PrivacyWebhookHandlers from "./privacy.js";
 import { storeRouter } from "./Routes/Store.Routes.js";
 import { thresholdRouter } from "./Routes/Threshold.Route.js";
 import paymentRouter from "./Routes/Payment.route.js";
+import { persistOfflineToken } from "./utils/offlineToken.js";
 
 // Keep the process alive if the Shopify auth middleware (or anything else)
 // throws asynchronously — e.g. a 403 from Shopify during access-token
@@ -235,19 +235,12 @@ const exchangeExpiringOfflineToken = async (shop, sessionToken) => {
 
   const data = await resp.json();
   console.log(
-    `[auth] token exchange OK for ${shop}: hasToken=${!!data.access_token} expires_in=${data.expires_in} scope=${data.scope}`
+    `[auth] token exchange OK for ${shop}: hasToken=${!!data.access_token} hasRefresh=${!!data.refresh_token} expires_in=${data.expires_in} scope=${data.scope}`
   );
-  return new Session({
-    id: shopify.api.session.getOfflineId(shop),
-    shop,
-    state: "",
-    isOnline: false,
-    accessToken: data.access_token,
-    scope: data.scope,
-    ...(data.expires_in && {
-      expires: new Date(Date.now() + data.expires_in * 1000),
-    }),
-  });
+  // Persist the offline session AND the rotating refresh_token (ShopAuth) so the
+  // webhook path can later refresh an expired token on its own. Returns the
+  // Session, preserving this function's contract for existing callers.
+  return await persistOfflineToken(shop, data);
 };
 
 // Per-shop lock so concurrent /api requests don't each run their own token
